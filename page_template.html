@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>{{.Title}}</title>
+	</head>
+	<body>
+		<div class="menu-container">{{template "menu" .Menu}}
+		</div>
+		<div class="article-container">
+			{{range .Articles}}
+			<h2>{{.Title}}</h2>
+			{{end}}
+		</div>
+	</body>
+</html>
+
+{{define "menu"}}
+{{range .}}<ul>
+{{range .}}	<li>{{template "menuentry" .}}</li>
+{{end}}</ul>{{end}}
+{{end}}
+
+{{define "menuentry"}}{{if .Active}}<div class="menu-active">{{else}}<div>{{end}}{{.Title}}</div>{{end}}
