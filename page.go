@@ -1,189 +1,254 @@
 package glubcms
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"html/template"
+	"io/ioutil"
 	"log"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
+
+	bf "github.com/russross/blackfriday"
 )
 
-type Entry struct {
-	active bool
-	author string
-	date   time.Time
-	html   []byte
-	link   url.URL
-	title  string
+type Entry interface {
+	Active() bool
+	Author() string
+	Date() time.Time
+	HTML() template.HTML
+	IsArticle() bool
+	Link() string
+	Title() string
 }
 
-func (e Entry) Title() string {
-	return e.title
+type Entries []Entry
+
+func (e Entries) Len() int {
+	return len(e)
 }
-func (e Entry) Link() string {
-	return e.link.String()
+func (e Entries) Less(i, j int) bool {
+	return e[i].Date().After(e[j].Date())
 }
-func (e Entry) IsActive() bool {
+func (e Entries) Swap(i, j int) {
+	e[i], e[j] = e[j], e[i]
+}
+func (e Entries) Split() (Menu, Articles Entries) {
+	for _, v := range e {
+		if v.IsArticle() {
+			Articles = append(Articles, v)
+		} else {
+			Menu = append(Menu, v)
+		}
+	}
+
+	return
+}
+
+type mtime time.Time
+
+func (t *mtime) UnmarshalJSON(b []byte) error {
+	layout := "2006-01-02 15:04"
+	tmp, err := time.Parse(layout, strings.Trim(string(b), "\""))
+	*t = mtime(tmp)
+	return err
+}
+
+type Meta struct {
+	Author string
+	Date   mtime
+	Title  string
+}
+
+type entry struct {
+	meta      Meta
+	active    bool
+	html      []byte
+	isarticle bool
+	link      url.URL
+}
+
+func (e entry) Active() bool {
 	return e.active
 }
-func (a Entry) Author() string {
-	return a.author
+func (a entry) Author() string {
+	return a.meta.Author
 }
-func (e Entry) Date() time.Time {
-	return e.date
+func (e entry) Date() time.Time {
+	return time.Time(e.meta.Date)
 }
-func (e Entry) HTML() []byte {
-	return e.html
+func (e entry) HTML() template.HTML {
+	return template.HTML(e.html)
 }
-func (e Entry) IsArticle() bool {
-	return e.HTML() != nil
+func (e entry) IsArticle() bool {
+	return e.isarticle
+}
+func (e entry) Link() string {
+	return e.link.String()
+}
+func (e entry) Title() string {
+	return e.meta.Title
 }
 
-type PTreeList []*PTree
-type PTree struct {
-	Entry
-	Children PTreeList
-}
-
-func (ptl PTreeList) Filter(filterfunc func(*PTree) bool) PTreeList {
-	var ret PTreeList
-	for _, e := range ptl {
-		if filterfunc(e) {
-			ret = append(ret, e)
-		}
+func entryFromMeta(path string) (*entry, error) {
+	ret := entry{}
+	f, err := os.Open(filepath.Join(path))
+	if err != nil {
+		return nil, err
 	}
+	defer f.Close()
+
+	err = json.NewDecoder(f).Decode(&ret.meta)
+	return &ret, err
+}
+
+func entryFromDir(prefix, path, activepath string) Entry {
+	ret, err := entryFromMeta(filepath.Join(prefix, path, "meta.json"))
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+
+	ret.link = url.URL{Path: path}
+	if strings.HasPrefix(activepath, path) {
+		ret.active = true
+	}
+
+	md, err := os.Open(filepath.Join(prefix, path, "article.md"))
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Println(err)
+		}
+		return ret
+	}
+	defer md.Close()
+
+	// only attempt to convert the markdown if it's the active path
+	if activepath == path {
+		b, err := ioutil.ReadAll(md)
+		if err != nil {
+			log.Println(err)
+			return ret
+		}
+		ret.html = bf.MarkdownBasic(b)
+	}
+
+	ret.isarticle = true
+
 	return ret
 }
 
-func (pt *PTree) Articles() PTreeList {
-	return pt.Children.Filter((*PTree).IsArticle)
-}
+func entriesFromDir(prefix, path, activepath string) Entries {
+	var ret Entries
 
-//func (pt *PTree) MenuEntries() []*PTree {
-//	return pt.Children.Filter((*PTree).IsMenu)
-//}
-func (pt *PTree) Active() *PTree {
-	ret := pt.Children.Filter((*PTree).IsActive)
-	switch len(ret) {
-	case 1:
-		return ret[0]
-	case 0:
-		return nil
-	default:
-		log.Fatalf("Multiple active children. %+v", ret)
+	dir, err := os.Open(filepath.Join(prefix, path))
+	if err != nil {
+		log.Println(err)
 		return nil
 	}
-}
-func (pt *PTree) IsLeaf() bool {
-	return pt.Children == nil
+
+	dirlist, err := dir.Readdir(0)
+	if err != nil {
+		log.Println(err)
+	}
+	dir.Close()
+
+	for _, fi := range dirlist {
+		if !fi.IsDir() {
+			continue
+		}
+		entry := entryFromDir(prefix, filepath.Join(path, fi.Name()), activepath)
+		if entry != nil {
+			ret = append(ret, entry)
+		}
+	}
+
+	sort.Sort(ret)
+	return ret
 }
 
-func splitfirstdir(s string) (string, string) {
-	if len(s) == 0 {
-		return "", ""
-	}
-	if s[0] == os.PathSeparator {
-		return splitfirstdir(s[1:])
-	}
-	split := strings.SplitN(s, string(os.PathSeparator), 2)
-	switch len(split) {
-	case 2:
-		return split[0], split[1]
-	case 1:
-		return split[0], ""
-	default:
-		return "", ""
-	}
+type Page struct {
+	Menu     []Entries
+	Articles Entries
+	Content  Entry
 }
 
-func PTreeFromDir(prefix string, path string) *PTree {
-	var ret *PTree
-	var dirname string
+func PageFromDir(prefix, path string) Page {
+	var p Page
 	path = filepath.Clean(path)
+	activepath := path
+
+	// look for an article in current path
+	if c := entryFromDir(prefix, path, activepath); c.IsArticle() {
+		p.Content = c
+	}
+
 	for {
-		dirname, path = splitfirstdir(path)
-		if dirname == "" {
+		menu, articles := entriesFromDir(prefix, path, activepath).Split()
+		if len(menu) > 0 {
+			sort.Sort(menu)
+			p.Menu = append(p.Menu, menu)
+		}
+		if p.Articles == nil && len(articles) > 0 {
+			sort.Sort(articles)
+			p.Articles = articles
+			if p.Content == nil {
+				// Parse again with activepath set, to get the markdown
+				cpath := p.Articles[0].Link()
+				p.Content = entryFromDir(prefix, cpath, cpath)
+				p.Articles[0] = p.Content
+			}
+		}
+		if path == "." || path == "/" {
 			break
 		}
-
+		path = filepath.Dir(path)
 	}
-	return ret
+
+	// building from deepest path to /, need to reverse
+	for l, r := 0, len(p.Menu)-1; l < r; l, r = l+1, r-1 {
+		p.Menu[l], p.Menu[r] = p.Menu[r], p.Menu[l]
+	}
+
+	return p
 }
 
-func pTreeFromDir(prefix string, path string) *PTree {
-	var ret PTree
+// For debugging
+func (p Page) Outline() string {
+	buf := bytes.Buffer{}
 
-	metafile, err := os.Open(filepath.Join(path, "meta.json"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = json.NewDecoder(metafile).Decode(&ret)
-	metafile.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
-	ret.link = url.URL{}
-
-	paths, err := filepath.Glob(filepath.Join(path, "*", "meta.json"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	for _, path := range paths {
-		path = filepath.Dir(path)
-		newChild := pTreeFromDir(prefix, path)
-		if newChild != nil {
-			ret.Children = append(ret.Children, newChild)
+	fmt.Fprintln(&buf, "Menu:")
+	for level, ms := range p.Menu {
+		for _, m := range ms {
+			fmt.Fprintf(&buf, "%s%q", strings.Repeat("\t", level), m.Title())
+			if m.Active() {
+				fmt.Fprintf(&buf, " (active)")
+			}
+			fmt.Fprintln(&buf)
 		}
 	}
 
-	if ret.Children != nil {
+	fmt.Fprintln(&buf, "Articles:")
+	for _, a := range p.Articles {
+		fmt.Fprintf(&buf, "%q", a.Title())
+		if a.Active() {
+			fmt.Fprintf(&buf, " (active)")
+		}
+		fmt.Fprintln(&buf)
+	}
+	fmt.Fprintln(&buf, "Content:")
+	if p.Content != nil {
+		fmt.Fprint(&buf, p.Content.Title())
 	}
 
-	return &ret
+	return buf.String()
 }
 
-//type Page struct {
-//	Menu     [][]MenuEntry
-//	Articles []Article
-//}
-//
-//func (p *Page) RenderHTML(t *template.Template) []byte {
-//	b := bytes.Buffer{}
-//	fmt.Println(t.Execute(&b, p))
-//	return b.Bytes()
-//}
-//
-//func (p *Page) Path() []MenuEntry {
-//	var ret []MenuEntry
-//level:
-//	for _, menuLevel := range p.Menu {
-//		for _, m := range menuLevel {
-//			if m.Active() {
-//				ret = append(ret, m)
-//				continue level
-//			}
-//		}
-//	}
-//
-//	return ret
-//}
-//
-//func (p *Page) Title(sep ...string) string {
-//	for _, a := range p.Articles {
-//		if a.Active() {
-//			return a.Title()
-//		}
-//	}
-//
-//	var menutitles []string
-//	for _, m := range p.Path() {
-//		menutitles = append(menutitles, m.Title())
-//	}
-//
-//	if len(sep) == 0 {
-//		sep = " - "
-//	}
-//	return strings.Join(menutitles, sep)
-//}
+func init() {
+	log.SetFlags(log.Flags() | log.Lshortfile)
+}
