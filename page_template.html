@@ -34,7 +34,7 @@
 {{define "content"}}{{with .}}
 
 <h1>{{template "link" .}}</h1>
-<p>{{.Author}} - {{.Date}}</p>
+<p>{{.Author}} - {{.Date.Format "2006-01-02 15:04"}}</p>
 <hr></hr>
 {{.HTML}}{{end}}{{end}}
 {{define "link"}}<a href="{{.Link}}"{{if .Active}} class="active"{{end}}>{{.Title}}</a>{{end}}
