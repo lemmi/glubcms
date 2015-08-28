@@ -25,6 +25,7 @@ func main() {
 	author := flag.String("author", "Webmaster", "Set the autorname")
 	title := flag.String("title", "New Page", "Set the title")
 	dirname := flag.String("dirname", "", "Set the directory name")
+	priority := flag.Int("priority", 0, "Set the priority")
 	simulate := flag.Bool("n", false, "Only show the result")
 	flag.Parse()
 
@@ -33,9 +34,10 @@ func main() {
 	}
 
 	b, err := json.MarshalIndent(glubcms.Meta{
-		Author: *author,
-		Title:  *title,
-		Date:   glubcms.GCTime(time.Now()),
+		Author:   *author,
+		Title:    *title,
+		Date:     glubcms.GCTime(time.Now()),
+		Priority: *priority,
 	}, "", "\t")
 
 	if err != nil {
