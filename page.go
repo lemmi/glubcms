@@ -51,18 +51,26 @@ func (e Entries) Split() (Menu, Articles Entries) {
 	return
 }
 
-type mtime time.Time
+type GCTime time.Time
 
-func (t *mtime) UnmarshalJSON(b []byte) error {
-	layout := "2006-01-02 15:04"
-	tmp, err := time.Parse(layout, strings.Trim(string(b), "\""))
-	*t = mtime(tmp)
+const GCTimeLayout = "2006-01-02 15:04"
+
+func (t *GCTime) UnmarshalJSON(b []byte) error {
+	tmp, err := time.Parse(GCTimeLayout, strings.Trim(string(b), "\""))
+	*t = GCTime(tmp)
 	return err
+}
+
+func (t GCTime) String() string {
+	return time.Time(t).Format(GCTimeLayout)
+}
+func (t GCTime) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + t.String() + `"`), nil
 }
 
 type Meta struct {
 	Author string
-	Date   mtime
+	Date   GCTime
 	Title  string
 }
 
