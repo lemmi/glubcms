@@ -25,6 +25,7 @@ type Entry interface {
 	HTML() template.HTML
 	IsArticle() bool
 	Link() string
+	Priority() int
 	Title() string
 }
 
@@ -34,6 +35,10 @@ func (e Entries) Len() int {
 	return len(e)
 }
 func (e Entries) Less(i, j int) bool {
+	ei, ej := e[i], e[j]
+	if ei.Priority() != ej.Priority() {
+		return ei.Priority() > ej.Priority()
+	}
 	return e[i].Date().After(e[j].Date())
 }
 func (e Entries) Swap(i, j int) {
@@ -69,9 +74,10 @@ func (t GCTime) MarshalJSON() ([]byte, error) {
 }
 
 type Meta struct {
-	Author string
-	Date   GCTime
-	Title  string
+	Author   string
+	Date     GCTime
+	Title    string
+	Priority int
 }
 
 type entry struct {
@@ -99,6 +105,9 @@ func (e entry) IsArticle() bool {
 }
 func (e entry) Link() string {
 	return e.link.String()
+}
+func (e entry) Priority() int {
+	return e.meta.Priority
 }
 func (e entry) Title() string {
 	return e.meta.Title
