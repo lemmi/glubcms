@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+	<head>{{template "head.tmpl" . }}
+	</head>
+	<body>
+		<header>
+{{template "pageheader.tmpl" .}}
+			<nav>
+{{template "menu.tmpl" .Menu}}
+			</nav>
+		</header>
+		<article>
+		{{template "content.tmpl" .}}
+		</article>
+	</body>
+</html>
+

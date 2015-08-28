@@ -1,0 +1,6 @@
+{{if gt (len .) 1}}
+				<aside>
+					<ul>{{range .}}
+						<li>{{template "link.tmpl" .}}</li>{{end}}
+					</ul>{{end}}
+				</aside>

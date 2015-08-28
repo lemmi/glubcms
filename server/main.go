@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"path/filepath"
 	"text/template"
 
 	"github.com/lemmi/glubcms"
@@ -17,20 +18,21 @@ type handler struct {
 func newhandler(prefix, templatepath string) handler {
 	return handler{
 		prefix: prefix,
-		tmpl:   template.Must(template.ParseFiles(templatepath)),
+		tmpl:   template.Must(template.ParseGlob(filepath.Join(templatepath, "*.tmpl"))),
 	}
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Println(h.tmpl.DefinedTemplates())
 	p := glubcms.PageFromDir(h.prefix, r.URL.Path)
-	if err := h.tmpl.Execute(w, p); err != nil {
+	if err := h.tmpl.ExecuteTemplate(w, "main.tmpl", p); err != nil {
 		log.Println(err)
 	}
 }
 
 func main() {
 	prefix := flag.String("prefix", "../example_page", "path to the root dir")
-	tmplpath := flag.String("template", "../page_template.html", "path to the template to use")
+	tmplpath := flag.String("template", "../templates", "path to the template to use")
 	addr := flag.String("bind", "localhost:8080", "address to bind to")
 	flag.Parse()
 	log.Fatal(http.ListenAndServe(*addr, newhandler(*prefix, *tmplpath)))
