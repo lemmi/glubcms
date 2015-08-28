@@ -113,6 +113,13 @@ func entryFromMeta(path string) (*entry, error) {
 	defer f.Close()
 
 	err = json.NewDecoder(f).Decode(&ret.meta)
+	if err != nil {
+		err = &os.PathError{
+			Op:   "Parsing json in",
+			Path: path,
+			Err:  err,
+		}
+	}
 	return &ret, err
 }
 
