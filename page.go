@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	bm "github.com/microcosm-cc/bluemonday"
 	bf "github.com/russross/blackfriday"
 )
 
@@ -136,6 +137,7 @@ func entryFromDir(prefix, path, activepath string) Entry {
 			return ret
 		}
 		ret.html = bf.MarkdownBasic(b)
+		ret.html = bm.UGCPolicy().SanitizeBytes(ret.html)
 	}
 
 	ret.isarticle = true
@@ -184,7 +186,7 @@ func PageFromDir(prefix, path string) Page {
 	activepath := path
 
 	// look for an article in current path
-	if c := entryFromDir(prefix, path, activepath); c.IsArticle() {
+	if c := entryFromDir(prefix, path, activepath); c != nil && c.IsArticle() {
 		p.Content = c
 	}
 
