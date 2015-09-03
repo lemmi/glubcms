@@ -140,7 +140,7 @@ func entryFromDir(prefix, path, activepath string) Entry {
 	}
 
 	ret.link = url.URL{Path: path}
-	if strings.HasPrefix(activepath, path) {
+	if strings.HasPrefix(activepath+string(os.PathSeparator), path+string(os.PathSeparator)) {
 		ret.active = true
 	}
 
