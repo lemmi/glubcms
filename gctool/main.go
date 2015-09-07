@@ -29,16 +29,24 @@ func main() {
 	simulate := flag.Bool("n", false, "Only show the result")
 	flag.Parse()
 
-	if *dirname == "" {
-		*dirname = strings.Map(delspace, strings.ToLower(*title))
-	}
-
-	b, err := json.MarshalIndent(glubcms.Meta{
+	meta := glubcms.Meta{
 		Author:   *author,
 		Title:    *title,
 		Date:     glubcms.GCTime(time.Now()),
 		Priority: *priority,
-	}, "", "\t")
+	}
+
+	if *dirname == "" {
+		*dirname = time.Time(meta.Date).Format("2006-01-02_")
+		*dirname += strings.NewReplacer(
+			"ä", "ae",
+			"ö", "oe",
+			"ü", "ue",
+			"ß", "ss").Replace(
+			strings.Map(delspace, strings.ToLower(*title)))
+	}
+
+	b, err := json.MarshalIndent(meta, "", "\t")
 
 	if err != nil {
 		panic(err)
