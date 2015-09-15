@@ -160,7 +160,7 @@ func entryFromDir(prefix, path, activepath string) Entry {
 			log.Println(err)
 			return ret
 		}
-		ret.html = bf.MarkdownBasic(b)
+		ret.html = bf.Markdown(b, bf.HtmlRenderer(bf.HTML_USE_XHTML, "", ""), bf.EXTENSION_TABLES)
 		ret.html = bm.UGCPolicy().SanitizeBytes(ret.html)
 	}
 
