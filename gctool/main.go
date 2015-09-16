@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -27,6 +28,7 @@ func main() {
 	dirname := flag.String("dirname", "", "Set the directory name")
 	priority := flag.Int("priority", 0, "Set the priority")
 	simulate := flag.Bool("n", false, "Only show the result")
+	edit := flag.Bool("e", false, "Open vim to edit the files")
 	flag.Parse()
 
 	meta := glubcms.Meta{
@@ -71,4 +73,23 @@ func main() {
 	}
 	fmt.Println(*dirname)
 	fmt.Println(string(b))
+
+	if *edit {
+		vimpath, err := exec.LookPath("vim")
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("Fount vim in %q\n", vimpath)
+		cmd := exec.Command(
+			vimpath,
+			"-O",
+			filepath.Join(*dirname, "article.md"),
+			filepath.Join(*dirname, "meta.json"))
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			fmt.Println(cmd.Run())
+		}
+	}
 }
