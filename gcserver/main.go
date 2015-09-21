@@ -11,21 +11,21 @@ import (
 )
 
 type handler struct {
-	prefix     string
-	pageprefix string
-	tmpl       *template.Template
+	prefix string
+	pagefs http.FileSystem
+	tmpl   *template.Template
 }
 
 func newhandler(prefix string) handler {
 	return handler{
-		prefix:     prefix,
-		pageprefix: filepath.Join(prefix, "pages"),
-		tmpl:       template.Must(template.ParseGlob(filepath.Join(prefix, "templates", "*.tmpl"))),
+		prefix: prefix,
+		pagefs: http.Dir(filepath.Join(prefix, "pages")),
+		tmpl:   template.Must(template.ParseGlob(filepath.Join(prefix, "templates", "*.tmpl"))),
 	}
 }
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	p := glubcms.PageFromDir(h.pageprefix, r.URL.Path)
+	p := glubcms.PageFromDir(h.pagefs, r.URL.Path)
 	if err := h.tmpl.ExecuteTemplate(w, "main.tmpl", p); err != nil {
 		log.Println(err)
 	}

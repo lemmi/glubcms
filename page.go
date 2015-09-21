@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -113,9 +114,9 @@ func (e entry) Title() string {
 	return e.meta.Title
 }
 
-func entryFromMeta(path string) (*entry, error) {
+func entryFromMeta(fs http.FileSystem, path string) (*entry, error) {
 	ret := entry{}
-	f, err := os.Open(filepath.Join(path))
+	f, err := fs.Open(filepath.Join(path))
 	if err != nil {
 		return nil, err
 	}
@@ -132,8 +133,8 @@ func entryFromMeta(path string) (*entry, error) {
 	return &ret, err
 }
 
-func entryFromDir(prefix, path, activepath string) Entry {
-	ret, err := entryFromMeta(filepath.Join(prefix, path, "meta.json"))
+func entryFromDir(fs http.FileSystem, path, activepath string) Entry {
+	ret, err := entryFromMeta(fs, filepath.Join(path, "meta.json"))
 	if err != nil {
 		log.Println(err)
 		return nil
@@ -144,7 +145,7 @@ func entryFromDir(prefix, path, activepath string) Entry {
 		ret.active = true
 	}
 
-	md, err := os.Open(filepath.Join(prefix, path, "article.md"))
+	md, err := fs.Open(filepath.Join(path, "article.md"))
 	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Println(err)
@@ -169,10 +170,10 @@ func entryFromDir(prefix, path, activepath string) Entry {
 	return ret
 }
 
-func entriesFromDir(prefix, path, activepath string) Entries {
+func entriesFromDir(fs http.FileSystem, path, activepath string) Entries {
 	var ret Entries
 
-	dir, err := os.Open(filepath.Join(prefix, path))
+	dir, err := fs.Open(path)
 	if err != nil {
 		log.Println(err)
 		return nil
@@ -188,7 +189,7 @@ func entriesFromDir(prefix, path, activepath string) Entries {
 		if !fi.IsDir() {
 			continue
 		}
-		entry := entryFromDir(prefix, filepath.Join(path, fi.Name()), activepath)
+		entry := entryFromDir(fs, filepath.Join(path, fi.Name()), activepath)
 		if entry != nil {
 			ret = append(ret, entry)
 		}
@@ -204,18 +205,18 @@ type Page struct {
 	Content  Entry
 }
 
-func PageFromDir(prefix, path string) Page {
+func PageFromDir(fs http.FileSystem, path string) Page {
 	var p Page
 	path = filepath.Clean(path)
 	activepath := path
 
 	// look for an article in current path
-	if c := entryFromDir(prefix, path, activepath); c != nil && c.IsArticle() {
+	if c := entryFromDir(fs, path, activepath); c != nil && c.IsArticle() {
 		p.Content = c
 	}
 
 	for {
-		menu, articles := entriesFromDir(prefix, path, activepath).Split()
+		menu, articles := entriesFromDir(fs, path, activepath).Split()
 		if len(menu) > 0 {
 			sort.Sort(menu)
 			p.Menu = append(p.Menu, menu)
@@ -226,7 +227,7 @@ func PageFromDir(prefix, path string) Page {
 			if p.Content == nil {
 				// Parse again with activepath set, to get the markdown
 				cpath := p.Articles[0].Link()
-				p.Content = entryFromDir(prefix, cpath, cpath)
+				p.Content = entryFromDir(fs, cpath, cpath)
 				p.Articles[0] = p.Content
 			}
 		}
