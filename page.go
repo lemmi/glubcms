@@ -79,6 +79,7 @@ type Meta struct {
 	Date     GCTime
 	Title    string
 	Priority int
+	Hidden   bool `json:",omitempty"`
 }
 
 type entry struct {
@@ -137,6 +138,11 @@ func entryFromDir(fs http.FileSystem, path, activepath string) Entry {
 	ret, err := entryFromMeta(fs, filepath.Join(path, "meta.json"))
 	if err != nil {
 		log.Println(err)
+		return nil
+	}
+
+	// skip hidden folders, unless directly asked for
+	if ret.meta.Hidden && activepath != path {
 		return nil
 	}
 
