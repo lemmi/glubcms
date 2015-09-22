@@ -147,6 +147,8 @@ func entryFromDir(fs http.FileSystem, path, activepath string) Entry {
 	}
 
 	ret.link = url.URL{Path: path}
+	// .Dir() removes trailing slashes, this prevents
+	// /a/b/ beeing seen as prefix from /a/bc/
 	if strings.HasPrefix(activepath+string(os.PathSeparator), path+string(os.PathSeparator)) {
 		ret.active = true
 	}
