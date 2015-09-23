@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"log"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"text/template"
 
 	"github.com/lemmi/glubcms"
+	"github.com/raymondbutcher/tidyhtml"
 )
 
 type handler struct {
@@ -26,9 +28,14 @@ func newhandler(prefix string) handler {
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := glubcms.PageFromDir(h.pagefs, r.URL.Path)
-	if err := h.tmpl.ExecuteTemplate(w, "main.tmpl", p); err != nil {
+	buf := bytes.Buffer{}
+	if err := h.tmpl.ExecuteTemplate(&buf, "main.tmpl", p); err != nil {
 		log.Println(err)
 	}
+	if err := tidyhtml.Copy(w, &buf); err != nil {
+		log.Println(err)
+	}
+
 }
 
 func main() {
