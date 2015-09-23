@@ -3,10 +3,10 @@ package main
 import (
 	"bytes"
 	"flag"
+	"html/template"
 	"log"
 	"net/http"
 	"path/filepath"
-	"text/template"
 
 	"github.com/lemmi/glubcms"
 	"github.com/raymondbutcher/tidyhtml"
