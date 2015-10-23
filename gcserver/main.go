@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -127,7 +128,12 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	prefix := flag.String("prefix", "../example_page", "path to the root dir")
-	addr := flag.String("bind", "localhost:8080", "address to bind to")
+	addr := flag.String("bind", "localhost:8080", "address or path to bind to")
+	network := flag.String("net", "tcp", `"tcp", "tcp4", "tcp6", "unix" or "unixpacket"`)
 	flag.Parse()
-	log.Fatal(http.ListenAndServe(*addr, newHandler(*prefix)))
+	ln, err := net.Listen(*network, *addr)
+	if err != nil {
+		panic(err)
+	}
+	log.Fatal(http.Serve(ln, newHandler(*prefix)))
 }
