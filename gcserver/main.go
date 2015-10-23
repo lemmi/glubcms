@@ -136,6 +136,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer ln.Close()
 	if strings.HasPrefix(*network, "unix") {
 		err = os.Chmod(*network, 0666)
 	}
