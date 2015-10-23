@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -132,6 +133,12 @@ func main() {
 	network := flag.String("net", "tcp", `"tcp", "tcp4", "tcp6", "unix" or "unixpacket"`)
 	flag.Parse()
 	ln, err := net.Listen(*network, *addr)
+	if err != nil {
+		panic(err)
+	}
+	if strings.HasPrefix(*network, "unix") {
+		err = os.Chmod(*network, 0666)
+	}
 	if err != nil {
 		panic(err)
 	}
