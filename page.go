@@ -80,6 +80,7 @@ type Meta struct {
 	Title    string
 	Priority int
 	Hidden   bool `json:",omitempty"`
+	Unsafe   bool `json:",omitempty"`
 }
 
 type entry struct {
@@ -170,7 +171,9 @@ func entryFromDir(fs http.FileSystem, path, activepath string) Entry {
 			return ret
 		}
 		ret.html = bf.Markdown(b, bf.HtmlRenderer(bf.HTML_USE_XHTML, "", ""), bf.EXTENSION_TABLES)
-		ret.html = bm.UGCPolicy().SanitizeBytes(ret.html)
+		if !ret.meta.Unsafe {
+			ret.html = bm.UGCPolicy().SanitizeBytes(ret.html)
+		}
 	}
 
 	ret.isarticle = true
