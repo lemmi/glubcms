@@ -32,6 +32,8 @@ type Entry interface {
 	Link() string
 	Priority() int
 	Title() string
+	Next() Entry
+	Prev() Entry
 }
 
 type entries []entry
@@ -93,6 +95,8 @@ type entry struct {
 	html      []byte
 	isarticle bool
 	link      url.URL
+	next      *entry
+	prev      *entry
 }
 
 func (e entry) Active() bool {
@@ -118,6 +122,12 @@ func (e entry) Priority() int {
 }
 func (e entry) Title() string {
 	return e.meta.Title
+}
+func (e entry) Next() Entry {
+	return e.next
+}
+func (e entry) Prev() Entry {
+	return e.prev
 }
 
 func entryFromMeta(fs http.FileSystem, path string) (entry, error) {
