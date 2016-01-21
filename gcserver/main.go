@@ -63,6 +63,13 @@ func parseTemplates(commit *g.Commit) (*template.Template, error) {
 	return tmain, nil
 }
 
+type StaticHandler struct {
+	fs http.FileSystem
+}
+
+func (sh StaticHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	ServeContentFs(w, r, sh.fs)
+}
 func newStaticHandler(c *g.Commit) (http.Handler, error) {
 	stree, err := c.Tree.SubTree("static")
 	return http.FileServer(ghfs.FromCommit(c, stree)), err
@@ -93,6 +100,27 @@ func (h pageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html")
 	http.ServeContent(w, r, "", h.c.Author.When, bytes.NewReader(tbuf.Bytes()))
+}
+
+// func ServeContent(w ResponseWriter, req *Request, name string, modtime time.Time, content io.ReadSeeker)
+func ServeContentFs(w http.ResponseWriter, req *http.Request, fs http.FileSystem) {
+	path := filepath.Clean(req.URL.Path)
+	f, err := fs.Open(path)
+	if err != nil {
+		http.Error(w, path, http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+	stat, err := f.Stat()
+	if err != nil {
+		http.Error(w, path, http.StatusInternalServerError)
+		return
+	}
+	if stat.IsDir() {
+		http.Error(w, path, http.StatusForbidden)
+		return
+	}
+	http.ServeContent(w, req, stat.Name(), stat.ModTime(), f)
 }
 
 type handler struct {
