@@ -34,22 +34,22 @@ type Entry interface {
 	Title() string
 }
 
-type Entries []Entry
+type entries []entry
 
-func (e Entries) Len() int {
+func (e entries) Len() int {
 	return len(e)
 }
-func (e Entries) Less(i, j int) bool {
+func (e entries) Less(i, j int) bool {
 	ei, ej := e[i], e[j]
 	if ei.Priority() != ej.Priority() {
 		return ei.Priority() > ej.Priority()
 	}
 	return e[i].Date().After(e[j].Date())
 }
-func (e Entries) Swap(i, j int) {
+func (e entries) Swap(i, j int) {
 	e[i], e[j] = e[j], e[i]
 }
-func (e Entries) Split() (Menu, Articles Entries) {
+func (e entries) Split() (Menu, Articles entries) {
 	for _, v := range e {
 		if v.IsArticle() {
 			Articles = append(Articles, v)
@@ -120,11 +120,11 @@ func (e entry) Title() string {
 	return e.meta.Title
 }
 
-func entryFromMeta(fs http.FileSystem, path string) (*entry, error) {
+func entryFromMeta(fs http.FileSystem, path string) (entry, error) {
 	ret := entry{}
 	f, err := fs.Open(filepath.Join(path))
 	if err != nil {
-		return nil, err
+		return ret, err
 	}
 	defer f.Close()
 
@@ -136,19 +136,19 @@ func entryFromMeta(fs http.FileSystem, path string) (*entry, error) {
 			Err:  err,
 		}
 	}
-	return &ret, err
+	return ret, err
 }
 
-func entryFromDir(fs http.FileSystem, path, activepath string) Entry {
-	ret, err := entryFromMeta(fs, filepath.Join(path, "meta.json"))
+func entryFromDir(fs http.FileSystem, path, activepath string) (ret entry, err error) {
+	ret, err = entryFromMeta(fs, filepath.Join(path, "meta.json"))
 	if err != nil {
 		log.Println(err)
-		return nil
+		return
 	}
 
 	// skip hidden folders, unless directly asked for
 	if ret.meta.Hidden && activepath != path {
-		return nil
+		return
 	}
 
 	ret.link = url.URL{Path: path}
@@ -163,7 +163,7 @@ func entryFromDir(fs http.FileSystem, path, activepath string) Entry {
 		if !os.IsNotExist(err) {
 			log.Println(err)
 		}
-		return ret
+		return
 	}
 	defer md.Close()
 
@@ -172,7 +172,7 @@ func entryFromDir(fs http.FileSystem, path, activepath string) Entry {
 		b, err := ioutil.ReadAll(md)
 		if err != nil {
 			log.Println(err)
-			return ret
+			return ret, err
 		}
 		ret.html = bf.Markdown(b, bf.HtmlRenderer(bf.HTML_USE_XHTML, "", ""), bf.EXTENSION_TABLES)
 		if !ret.meta.Unsafe {
@@ -182,11 +182,11 @@ func entryFromDir(fs http.FileSystem, path, activepath string) Entry {
 
 	ret.isarticle = true
 
-	return ret
+	return
 }
 
-func entriesFromDir(fs http.FileSystem, path, activepath string) Entries {
-	var ret Entries
+func entriesFromDir(fs http.FileSystem, path, activepath string) entries {
+	var ret entries
 
 	dir, err := fs.Open(path)
 	if err != nil {
@@ -204,8 +204,8 @@ func entriesFromDir(fs http.FileSystem, path, activepath string) Entries {
 		if !fi.IsDir() {
 			continue
 		}
-		entry := entryFromDir(fs, filepath.Join(path, fi.Name()), activepath)
-		if entry != nil {
+		entry, err := entryFromDir(fs, filepath.Join(path, fi.Name()), activepath)
+		if err == nil {
 			ret = append(ret, entry)
 		}
 	}
@@ -215,9 +215,9 @@ func entriesFromDir(fs http.FileSystem, path, activepath string) Entries {
 }
 
 type Page struct {
-	Menu     []Entries
-	Articles Entries
-	Content  Entry
+	Menu     []entries
+	Articles entries
+	Content  *entry
 }
 
 func PageFromDir(fs http.FileSystem, path string) Page {
@@ -226,8 +226,8 @@ func PageFromDir(fs http.FileSystem, path string) Page {
 	activepath := path
 
 	// look for an article in current path
-	if c := entryFromDir(fs, path, activepath); c != nil && c.IsArticle() {
-		p.Content = c
+	if c, err := entryFromDir(fs, path, activepath); err != nil && c.IsArticle() {
+		p.Content = &c
 	}
 
 	for {
@@ -242,7 +242,7 @@ func PageFromDir(fs http.FileSystem, path string) Page {
 			if p.Content == nil {
 				// Parse again with activepath set, to get the markdown
 				cpath := p.Articles[0].Link()
-				p.Content = entryFromDir(fs, cpath, cpath)
+				p.Content, _ = entryFromDir(fs, cpath, cpath) // TODO: check error
 				p.Articles[0] = p.Content
 			}
 		}
