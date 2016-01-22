@@ -94,17 +94,22 @@ type Meta struct {
 	Unsafe   bool `json:",omitempty"`
 }
 
+type ContentRenderer interface {
+	Render() []byte
+}
+
 type entry struct {
-	meta      Meta
-	active    bool
-	html      []byte
-	isarticle bool
-	link      url.URL
-	next      *entry
-	prev      *entry
-	fs        http.FileSystem
-	md_path   string
-	once      sync.Once
+	meta       Meta
+	active     bool
+	html       []byte
+	isarticle  bool
+	link       url.URL
+	next       *entry
+	prev       *entry
+	fs         http.FileSystem
+	md_path    string
+	once       sync.Once
+	renderHTML ContentRenderer
 }
 
 func (e entry) Active() bool {
@@ -117,27 +122,10 @@ func (e entry) Date() time.Time {
 	return time.Time(e.meta.Date)
 }
 func (e *entry) HTML() template.HTML {
-	e.once.Do(e.renderHTML)
+	e.once.Do(func() {
+		e.html = e.renderHTML.Render()
+	})
 	return template.HTML(e.html)
-}
-func (e *entry) renderHTML() {
-	md, err := e.fs.Open(e.md_path)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Println(err)
-		}
-		return
-	}
-	defer md.Close()
-
-	b, err := ioutil.ReadAll(md)
-	if err != nil {
-		log.Println(err)
-	}
-	e.html = bf.Markdown(b, bf.HtmlRenderer(bf.HTML_USE_XHTML, "", ""), bf.EXTENSION_TABLES)
-	if !e.meta.Unsafe {
-		e.html = bm.UGCPolicy().SanitizeBytes(e.html)
-	}
 }
 func (e entry) IsArticle() bool {
 	return e.isarticle
@@ -208,11 +196,41 @@ func entryFromDir(fs http.FileSystem, path, activepath string) (ret entry, err e
 	}
 	md.Close()
 
-	ret.fs = fs
-	ret.md_path = md_path
 	ret.isarticle = true
+	ret.renderHTML = articleRenderer{
+		fs:      fs,
+		md_path: md_path,
+		unsafe:  ret.meta.Unsafe,
+	}
 
 	return ret, nil
+}
+
+type articleRenderer struct {
+	fs      http.FileSystem
+	md_path string
+	unsafe  bool
+}
+
+func (a articleRenderer) Render() []byte {
+	md, err := a.fs.Open(a.md_path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Println(err)
+		}
+		return nil
+	}
+	defer md.Close()
+
+	b, err := ioutil.ReadAll(md)
+	if err != nil {
+		log.Println(err)
+	}
+	html := bf.Markdown(b, bf.HtmlRenderer(bf.HTML_USE_XHTML, "", ""), bf.EXTENSION_TABLES)
+	if !a.unsafe {
+		html = bm.UGCPolicy().SanitizeBytes(html)
+	}
+	return html
 }
 
 func entriesFromDir(fs http.FileSystem, path, activepath string) entries {
