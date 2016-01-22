@@ -3,6 +3,7 @@ package glubcms
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	bm "github.com/microcosm-cc/bluemonday"
@@ -21,6 +23,10 @@ import (
 
 const (
 	PSep = string(os.PathSeparator)
+)
+
+var (
+	ErrHidden = errors.New("Hidden")
 )
 
 type Entry interface {
@@ -42,9 +48,8 @@ func (e entries) Len() int {
 	return len(e)
 }
 func (e entries) Less(i, j int) bool {
-	ei, ej := e[i], e[j]
-	if ei.Priority() != ej.Priority() {
-		return ei.Priority() > ej.Priority()
+	if e[i].Priority() != e[j].Priority() {
+		return e[i].Priority() > e[j].Priority()
 	}
 	return e[i].Date().After(e[j].Date())
 }
@@ -97,6 +102,9 @@ type entry struct {
 	link      url.URL
 	next      *entry
 	prev      *entry
+	fs        http.FileSystem
+	md_path   string
+	once      sync.Once
 }
 
 func (e entry) Active() bool {
@@ -108,8 +116,28 @@ func (a entry) Author() string {
 func (e entry) Date() time.Time {
 	return time.Time(e.meta.Date)
 }
-func (e entry) HTML() template.HTML {
+func (e *entry) HTML() template.HTML {
+	e.once.Do(e.renderHTML)
 	return template.HTML(e.html)
+}
+func (e *entry) renderHTML() {
+	md, err := e.fs.Open(e.md_path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Println(err)
+		}
+		return
+	}
+	defer md.Close()
+
+	b, err := ioutil.ReadAll(md)
+	if err != nil {
+		log.Println(err)
+	}
+	e.html = bf.Markdown(b, bf.HtmlRenderer(bf.HTML_USE_XHTML, "", ""), bf.EXTENSION_TABLES)
+	if !e.meta.Unsafe {
+		e.html = bm.UGCPolicy().SanitizeBytes(e.html)
+	}
 }
 func (e entry) IsArticle() bool {
 	return e.isarticle
@@ -153,12 +181,12 @@ func entryFromDir(fs http.FileSystem, path, activepath string) (ret entry, err e
 	ret, err = entryFromMeta(fs, filepath.Join(path, "meta.json"))
 	if err != nil {
 		log.Println(err)
-		return
+		return ret, err
 	}
 
 	// skip hidden folders, unless directly asked for
 	if ret.meta.Hidden && activepath != path {
-		return
+		return ret, ErrHidden
 	}
 
 	ret.link = url.URL{Path: path}
@@ -168,31 +196,23 @@ func entryFromDir(fs http.FileSystem, path, activepath string) (ret entry, err e
 		ret.active = true
 	}
 
-	md, err := fs.Open(filepath.Join(path, "article.md"))
+	md_path := filepath.Join(path, "article.md")
+	md, err := fs.Open(md_path)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Println(err)
+		} else {
+			err = nil
 		}
-		return
+		return ret, err
 	}
-	defer md.Close()
+	md.Close()
 
-	// only attempt to convert the markdown if it's the active path
-	if activepath == path {
-		b, err := ioutil.ReadAll(md)
-		if err != nil {
-			log.Println(err)
-			return ret, err
-		}
-		ret.html = bf.Markdown(b, bf.HtmlRenderer(bf.HTML_USE_XHTML, "", ""), bf.EXTENSION_TABLES)
-		if !ret.meta.Unsafe {
-			ret.html = bm.UGCPolicy().SanitizeBytes(ret.html)
-		}
-	}
-
+	ret.fs = fs
+	ret.md_path = md_path
 	ret.isarticle = true
 
-	return
+	return ret, nil
 }
 
 func entriesFromDir(fs http.FileSystem, path, activepath string) entries {
@@ -236,7 +256,7 @@ func PageFromDir(fs http.FileSystem, path string) Page {
 	activepath := path
 
 	// look for an article in current path
-	if c, err := entryFromDir(fs, path, activepath); err != nil && c.IsArticle() {
+	if c, err := entryFromDir(fs, path, activepath); err == nil && c.IsArticle() {
 		p.Content = &c
 	}
 
@@ -250,10 +270,8 @@ func PageFromDir(fs http.FileSystem, path string) Page {
 			sort.Sort(articles)
 			p.Articles = articles
 			if p.Content == nil {
-				// Parse again with activepath set, to get the markdown
-				cpath := p.Articles[0].Link()
-				p.Content, _ = entryFromDir(fs, cpath, cpath) // TODO: check error
-				p.Articles[0] = p.Content
+				p.Content = &p.Articles[0]
+				p.Content.active = true
 			}
 		}
 		if path == "." || path == "/" {
