@@ -291,8 +291,8 @@ func PageFromDir(fs http.FileSystem, path string) Page {
 
 			// link next/prev pointers
 			for i := 1; i < len(p.Articles); i++ {
-				p.Articles[i].prev = &p.Articles[i-1]
-				p.Articles[i-1].next = &p.Articles[i]
+				p.Articles[i].next = &p.Articles[i-1]
+				p.Articles[i-1].prev = &p.Articles[i]
 			}
 
 			// set the active article as content
