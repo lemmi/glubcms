@@ -140,10 +140,16 @@ func (e entry) Title() string {
 	return e.meta.Title
 }
 func (e entry) Next() Entry {
-	return e.next
+	if e.next != nil {
+		return e.next
+	}
+	return nil
 }
 func (e entry) Prev() Entry {
-	return e.prev
+	if e.prev != nil {
+		return e.prev
+	}
+	return nil
 }
 
 func entryFromMeta(fs http.FileSystem, path string) (entry, error) {
@@ -273,11 +279,6 @@ func PageFromDir(fs http.FileSystem, path string) Page {
 	path = filepath.Clean(path)
 	activepath := path
 
-	// look for an article in current path
-	if c, err := entryFromDir(fs, path, activepath); err == nil && c.IsArticle() {
-		p.Content = &c
-	}
-
 	for {
 		menu, articles := entriesFromDir(fs, path, activepath).Split()
 		if len(menu) > 0 {
@@ -287,6 +288,21 @@ func PageFromDir(fs http.FileSystem, path string) Page {
 		if p.Articles == nil && len(articles) > 0 {
 			sort.Sort(articles)
 			p.Articles = articles
+
+			// link next/prev pointers
+			for i := 1; i < len(p.Articles); i++ {
+				p.Articles[i].prev = &p.Articles[i-1]
+				p.Articles[i-1].next = &p.Articles[i]
+			}
+
+			// set the active article as content
+			for i := 0; i < len(p.Articles); i++ {
+				if p.Articles[i].link.Path == activepath {
+					p.Content = &p.Articles[i]
+				}
+			}
+
+			// if no exact match, default to first article
 			if p.Content == nil {
 				p.Content = &p.Articles[0]
 				p.Content.active = true
