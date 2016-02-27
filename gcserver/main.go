@@ -53,8 +53,8 @@ func parseTemplates(fs http.FileSystem) (*template.Template, error) {
 			return nil, err
 		}
 
-		//tname := strings.TrimSuffix(fi.Name(), ".tmpl")
-		_, err = tmain.New(fi.Name()).Parse(string(databytes))
+		tname := strings.TrimSuffix(fi.Name(), ".tmpl")
+		_, err = tmain.New(tname).Parse(string(databytes))
 		if err != nil {
 			return nil, err
 		}
@@ -89,7 +89,7 @@ func (h pageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	p := glubcms.PageFromDir(ghfs.FromCommit(h.c, stree), r.URL.Path)
 	buf := bytes.Buffer{}
-	if err := tmpl.ExecuteTemplate(&buf, "main.tmpl", p); err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, "main", p); err != nil {
 		log.Println(err)
 		return
 	}
