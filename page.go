@@ -48,7 +48,12 @@ func (e entries) Len() int {
 	return len(e)
 }
 func (e entries) Less(i, j int) bool {
-	if e[i].Priority() != e[j].Priority() {
+	switch {
+	case e[i].meta.IsIndex && !e[j].meta.IsIndex:
+		return false
+	case !e[i].meta.IsIndex && e[j].meta.IsIndex:
+		return true
+	case e[i].Priority() != e[j].Priority():
 		return e[i].Priority() > e[j].Priority()
 	}
 	return e[i].Date().After(e[j].Date())
@@ -92,6 +97,7 @@ type Meta struct {
 	Priority int
 	Hidden   bool `json:",omitempty"`
 	Unsafe   bool `json:",omitempty"`
+	IsIndex  bool `json:",omitempty"`
 }
 
 type ContentRenderer interface {
@@ -272,6 +278,7 @@ type Page struct {
 	Menu     []entries
 	Articles entries
 	Content  *entry
+	Index    *entry
 }
 
 func PageFromDir(fs http.FileSystem, path string) Page {
@@ -299,6 +306,7 @@ func PageFromDir(fs http.FileSystem, path string) Page {
 			for i := 0; i < len(p.Articles); i++ {
 				if p.Articles[i].link.Path == activepath {
 					p.Content = &p.Articles[i]
+					break
 				}
 			}
 
@@ -306,6 +314,12 @@ func PageFromDir(fs http.FileSystem, path string) Page {
 			if p.Content == nil {
 				p.Content = &p.Articles[0]
 				p.Content.active = true
+			}
+
+			// don't list the index page as article
+			for p.Articles[len(p.Articles)-1].meta.IsIndex {
+				p.Index = &p.Articles[len(p.Articles)-1]
+				p.Articles = p.Articles[:len(p.Articles)-1]
 			}
 		}
 		if path == "." || path == "/" {
