@@ -18,6 +18,10 @@ import (
 	"github.com/raymondbutcher/tidyhtml"
 )
 
+const (
+	tmplPath = "templates"
+)
+
 func POE(err error, prefix ...interface{}) {
 	if err != nil {
 		log.Print(prefix...)
@@ -25,39 +29,35 @@ func POE(err error, prefix ...interface{}) {
 	}
 }
 
-func parseTemplates(commit *g.Commit) (*template.Template, error) {
-	ttree, err := commit.Tree.SubTree("templates")
+func parseTemplates(fs http.FileSystem) (*template.Template, error) {
+	dir, err := fs.Open(tmplPath)
 	if err != nil {
 		return nil, err
 	}
-	scan, err := ttree.Scanner()
+	tmain := template.New("main")
+	fis, err := dir.Readdir(-1)
 	if err != nil {
 		return nil, err
 	}
-	tmain := template.New("templatecontainer")
-	for scan.Scan() {
-		entry := scan.TreeEntry()
-		if !strings.HasSuffix(entry.Name(), ".tmpl") {
+	for _, fi := range fis {
+		if !strings.HasSuffix(fi.Name(), ".tmpl") {
 			continue
 		}
-		data, err := entry.Blob().Data()
+		data, err := fs.Open(filepath.Join(tmplPath, fi.Name()))
 		if err != nil {
 			return nil, err
 		}
-		defer data.Close()
 		databytes, err := ioutil.ReadAll(data)
+		data.Close()
 		if err != nil {
 			return nil, err
 		}
 
-		_, err = tmain.New(entry.Name()).Parse(string(databytes))
+		//tname := strings.TrimSuffix(fi.Name(), ".tmpl")
+		_, err = tmain.New(fi.Name()).Parse(string(databytes))
 		if err != nil {
 			return nil, err
 		}
-	}
-
-	if err := scan.Err(); err != nil {
-		return nil, err
 	}
 
 	return tmain, nil
@@ -83,7 +83,7 @@ func newPageHandler(c *g.Commit) http.Handler {
 	return pageHandler{c}
 }
 func (h pageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	tmpl := template.Must(parseTemplates(h.c))
+	tmpl := template.Must(parseTemplates(ghfs.FromCommit(h.c)))
 	stree, err := h.c.Tree.SubTree("pages")
 	POE(err, "Pages")
 
