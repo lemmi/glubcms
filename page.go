@@ -157,6 +157,42 @@ func (e entry) Prev() Entry {
 	}
 	return nil
 }
+func (e entry) IsIndex() bool {
+	return e.meta.IsIndex
+}
+func (e *entry) Context(c int) entries {
+	next := e
+	prev := e
+	n := 1
+
+	for {
+		moved := false
+
+		if n < c && next.next != nil {
+			moved = true
+			next = next.next
+			n++
+		}
+		if n < c && prev.prev != nil {
+			moved = true
+			prev = prev.prev
+			n++
+		}
+
+		if n == c || moved == false {
+			break
+		}
+	}
+
+	ret := make(entries, 0, n)
+	t := next
+	for n > 0 {
+		ret = append(ret, *t)
+		t = t.prev
+		n--
+	}
+	return ret
+}
 
 func entryFromMeta(fs http.FileSystem, path string) (entry, error) {
 	ret := entry{}
@@ -292,9 +328,16 @@ func PageFromDir(fs http.FileSystem, path string) Page {
 			sort.Sort(menu)
 			p.Menu = append(p.Menu, menu)
 		}
+
 		if p.Articles == nil && len(articles) > 0 {
 			sort.Sort(articles)
 			p.Articles = articles
+
+			// don't list the index page as article
+			for p.Articles[len(p.Articles)-1].meta.IsIndex {
+				p.Index = &p.Articles[len(p.Articles)-1]
+				p.Articles = p.Articles[:len(p.Articles)-1]
+			}
 
 			// link next/prev pointers
 			for i := 1; i < len(p.Articles); i++ {
@@ -303,9 +346,9 @@ func PageFromDir(fs http.FileSystem, path string) Page {
 			}
 
 			// set the active article as content
-			for i := 0; i < len(p.Articles); i++ {
-				if p.Articles[i].link.Path == activepath {
-					p.Content = &p.Articles[i]
+			for i := range articles {
+				if articles[i].link.Path == activepath {
+					p.Content = &articles[i]
 					break
 				}
 			}
@@ -315,16 +358,12 @@ func PageFromDir(fs http.FileSystem, path string) Page {
 				p.Content = &p.Articles[0]
 				p.Content.active = true
 			}
-
-			// don't list the index page as article
-			for p.Articles[len(p.Articles)-1].meta.IsIndex {
-				p.Index = &p.Articles[len(p.Articles)-1]
-				p.Articles = p.Articles[:len(p.Articles)-1]
-			}
 		}
+
 		if path == "." || path == "/" {
 			break
 		}
+
 		path = filepath.Dir(path)
 	}
 
