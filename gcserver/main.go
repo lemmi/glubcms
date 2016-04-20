@@ -152,6 +152,8 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	mux.Handle("/robots.txt", staticHandler)
 	mux.Handle("/favicon.ico", staticHandler)
 	mux.Handle("/", newPageHandler(commit))
+	w.Header().Set("ETag", strings.Trim(commit.Id.String(), "\""))
+	w.Header().Set("Cache-Control", "max-age=32")
 	mux.ServeHTTP(w, r)
 }
 
