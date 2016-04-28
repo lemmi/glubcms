@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	g "github.com/gogits/git"
 	"github.com/lemmi/ghfs"
-	g "github.com/lemmi/git"
 	"github.com/lemmi/glubcms"
 	"github.com/raymondbutcher/tidyhtml"
 )
