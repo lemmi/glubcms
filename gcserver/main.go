@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"flag"
+	"github.com/pkg/errors"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -32,31 +33,33 @@ func POE(err error, prefix ...interface{}) {
 func parseTemplates(fs http.FileSystem) (*template.Template, error) {
 	dir, err := fs.Open(tmplPath)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "Cannot open directory: %q", tmplPath)
 	}
+	defer dir.Close()
 	tmain := template.New("main")
 	fis, err := dir.Readdir(-1)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "Cannot read directory: %q", tmplPath)
 	}
 	for _, fi := range fis {
 		if !strings.HasSuffix(fi.Name(), ".tmpl") {
 			continue
 		}
-		data, err := fs.Open(filepath.Join(tmplPath, fi.Name()))
+		fpath := filepath.Join(tmplPath, fi.Name())
+		data, err := fs.Open(fpath)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "Cannot open file: %q", fpath)
 		}
 		databytes, err := ioutil.ReadAll(data)
 		data.Close()
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "Cannot read file: %q", fpath)
 		}
 
 		tname := strings.TrimSuffix(fi.Name(), ".tmpl")
 		_, err = tmain.New(tname).Parse(string(databytes))
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "Cannot parse template: %q", fpath)
 		}
 	}
 
@@ -90,12 +93,12 @@ func (h pageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := glubcms.PageFromDir(ghfs.FromCommit(h.c, stree), r.URL.Path)
 	buf := bytes.Buffer{}
 	if err := tmpl.ExecuteTemplate(&buf, "main", p); err != nil {
-		log.Println(err)
+		log.Println(errors.Wrapf(err, "template execution failed: %q", r.URL.Path))
 		return
 	}
 	tbuf := bytes.Buffer{}
 	if err := tidyhtml.Copy(&tbuf, &buf); err != nil {
-		log.Println(err)
+		log.Println(errors.Wrapf(err, "tidyhtml failed: %q", r.URL.Path))
 		return
 	}
 	w.Header().Set("Content-Type", "text/html")
