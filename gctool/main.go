@@ -28,6 +28,7 @@ func main() {
 	dirname := flag.String("dirname", "", "Set the directory name")
 	priority := flag.Int("priority", 0, "Set the priority")
 	simulate := flag.Bool("n", false, "Only show the result")
+	hidden := flag.Bool("hidden", false, "Hide the page")
 	edit := flag.Bool("e", false, "Open vim to edit the files")
 	flag.Parse()
 
@@ -36,6 +37,7 @@ func main() {
 		Title:    *title,
 		Date:     glubcms.GCTime(time.Now()),
 		Priority: *priority,
+		Hidden:   *hidden,
 	}
 
 	if *dirname == "" {
