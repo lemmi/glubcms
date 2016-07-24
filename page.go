@@ -3,8 +3,8 @@ package glubcms
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -79,6 +79,9 @@ const GCTimeLayout = "2006-01-02 15:04"
 
 func (t *GCTime) UnmarshalJSON(b []byte) error {
 	tmp, err := time.Parse(GCTimeLayout, strings.Trim(string(b), "\""))
+	if err != nil {
+		err = errors.Wrapf(err, "time.Parse failed on %q", b)
+	}
 	*t = GCTime(tmp)
 	return err
 }
@@ -101,7 +104,7 @@ type Meta struct {
 }
 
 type ContentRenderer interface {
-	Render() []byte
+	Render() ([]byte, error)
 }
 
 type entry struct {
@@ -129,7 +132,12 @@ func (e entry) Date() time.Time {
 }
 func (e *entry) HTML() template.HTML {
 	e.once.Do(func() {
-		e.html = e.renderHTML.Render()
+		var err error
+		e.html, err = e.renderHTML.Render()
+		if err != nil {
+			//TODO make errorpage
+			log.Println(err)
+		}
 	})
 	return template.HTML(e.html)
 }
@@ -198,17 +206,13 @@ func entryFromMeta(fs http.FileSystem, path string) (entry, error) {
 	ret := entry{}
 	f, err := fs.Open(filepath.Join(path))
 	if err != nil {
-		return ret, err
+		return ret, errors.Wrapf(err, "file open failed: %q", path)
 	}
 	defer f.Close()
 
 	err = json.NewDecoder(f).Decode(&ret.meta)
 	if err != nil {
-		err = &os.PathError{
-			Op:   "Parsing json in",
-			Path: path,
-			Err:  err,
-		}
+		err = errors.Wrapf(err, "Parsing json in: %q", path)
 	}
 	return ret, err
 }
@@ -216,7 +220,7 @@ func entryFromMeta(fs http.FileSystem, path string) (entry, error) {
 func entryFromDir(fs http.FileSystem, path, activepath string) (ret entry, err error) {
 	ret, err = entryFromMeta(fs, filepath.Join(path, "meta.json"))
 	if err != nil {
-		log.Println(err)
+		err = errors.Wrapf(err, "Cannot open meta.json in: %q", path)
 		return ret, err
 	}
 
@@ -234,13 +238,13 @@ func entryFromDir(fs http.FileSystem, path, activepath string) (ret entry, err e
 
 	md_path := filepath.Join(path, "article.md")
 	md, err := fs.Open(md_path)
+	// Decide wether this is menu or article
+	// TODO add entry to metadata and remove implicit menus
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Println(err)
-		} else {
-			err = nil
+			return ret, errors.Wrapf(err, "Cannot open article.md in: %q", path)
 		}
-		return ret, err
+		return ret, nil
 	}
 	md.Close()
 
@@ -260,25 +264,22 @@ type articleRenderer struct {
 	unsafe  bool
 }
 
-func (a articleRenderer) Render() []byte {
+func (a articleRenderer) Render() ([]byte, error) {
 	md, err := a.fs.Open(a.md_path)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Println(err)
-		}
-		return nil
+		return nil, errors.Wrapf(err, "Cannot open markdown file: %q", a.md_path)
 	}
 	defer md.Close()
 
 	b, err := ioutil.ReadAll(md)
 	if err != nil {
-		log.Println(err)
+		return nil, errors.Wrapf(err, "Cannot read markdown file: %q", a.md_path)
 	}
 	html := bf.Markdown(b, bf.HtmlRenderer(bf.HTML_USE_XHTML, "", ""), bf.EXTENSION_TABLES)
 	if !a.unsafe {
 		html = bm.UGCPolicy().SanitizeBytes(html)
 	}
-	return html
+	return html, nil
 }
 
 func entriesFromDir(fs http.FileSystem, path, activepath string) entries {
@@ -286,12 +287,14 @@ func entriesFromDir(fs http.FileSystem, path, activepath string) entries {
 
 	dir, err := fs.Open(path)
 	if err != nil {
+		err = errors.Wrapf(err, "Cannot open directory: %q", path)
 		log.Println(err)
 		return nil
 	}
 
 	dirlist, err := dir.Readdir(0)
 	if err != nil {
+		err = errors.Wrapf(err, "Cannot read directory: %q", path)
 		log.Println(err)
 	}
 	dir.Close()
