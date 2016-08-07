@@ -70,9 +70,14 @@ func parseTemplates(fs http.FileSystem) (*template.Template, error) {
 // TODO:
 // - factor out
 
-func ServeContentFs(w http.ResponseWriter, req *http.Request, fs http.FileSystem) {
-	path := filepath.Clean(req.URL.Path)
-	f, err := fs.Open(path)
+type StaticHandler struct {
+	fs     http.FileSystem
+	prefix string
+}
+
+func (sh StaticHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := filepath.Clean(filepath.Join(sh.prefix, r.URL.Path))
+	f, err := sh.fs.Open(path)
 	if err != nil {
 		http.Error(w, path, http.StatusNotFound)
 		return
@@ -84,22 +89,19 @@ func ServeContentFs(w http.ResponseWriter, req *http.Request, fs http.FileSystem
 		return
 	}
 	if stat.IsDir() {
-		http.Error(w, path, http.StatusForbidden)
+		http.Error(w, path, http.StatusNotFound)
 		return
 	}
-	http.ServeContent(w, req, stat.Name(), stat.ModTime(), f)
+	http.ServeContent(w, r, stat.Name(), stat.ModTime(), f)
 }
 
-type StaticHandler struct {
-	fs http.FileSystem
+func (sh StaticHandler) Cd(path string) StaticHandler {
+	sh.prefix = filepath.Join(sh.prefix, path)
+	return sh
 }
 
-func (sh StaticHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	ServeContentFs(w, r, sh.fs)
-}
-func newStaticHandler(c *g.Commit) (http.Handler, error) {
-	stree, err := c.Tree.SubTree("static")
-	return http.FileServer(ghfs.FromCommit(c, stree)), err
+func newStaticHandler(fs http.FileSystem) StaticHandler {
+	return StaticHandler{fs: fs}
 }
 
 // Handling of an article or menu entry
@@ -159,12 +161,11 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	mux := http.NewServeMux()
 
-	staticHandler, err := newStaticHandler(commit)
-	POE(err, "StaticHandler")
+	staticHandler := newStaticHandler(ghfs.FromCommit(commit))
 
-	mux.Handle("/static/", http.StripPrefix("/static/", staticHandler))
-	mux.Handle("/robots.txt", staticHandler)
-	mux.Handle("/favicon.ico", staticHandler)
+	mux.Handle("/static/", staticHandler)
+	mux.Handle("/robots.txt", staticHandler.Cd("/static"))
+	mux.Handle("/favicon.ico", staticHandler.Cd("/static"))
 	mux.Handle("/", newPageHandler(commit))
 	w.Header().Set("ETag", strings.Trim(commit.Id.String(), "\""))
 	w.Header().Set("Cache-Control", "max-age=32")
