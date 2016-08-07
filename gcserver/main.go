@@ -23,7 +23,17 @@ const (
 	tmplPath = "templates"
 )
 
+type stackTracer interface {
+	StackTrace() errors.StackTrace
+}
+
 func HttpError(w http.ResponseWriter, code int, logErr error) {
+	//switch err := logErr.(type) {
+	//case stackTracer:
+	//	log.Printf("%+v", err.StackTrace())
+	//default:
+	//	log.Print(err)
+	//}
 	log.Print(logErr)
 	http.Error(w, http.StatusText(code), code)
 }
@@ -121,7 +131,11 @@ func (h pageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := glubcms.PageFromDir(ghfs.FromCommit(h.c, stree), r.URL.Path)
+	p, err := glubcms.PageFromDir(ghfs.FromCommit(h.c, stree), r.URL.Path)
+	if err != nil {
+		HttpError(w, http.StatusInternalServerError, errors.Wrapf(err, "page generation failed"))
+		return
+	}
 	buf := bytes.Buffer{}
 	if err := tmpl.ExecuteTemplate(&buf, "main", p); err != nil {
 		HttpError(w, http.StatusInternalServerError, errors.Wrapf(err, "template execution failed: %q", r.URL.Path))
@@ -199,5 +213,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	log.Println("Starting")
 	log.Fatal(http.Serve(ln, newHandler(*prefix)))
 }

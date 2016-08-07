@@ -282,20 +282,17 @@ func (a articleRenderer) Render() ([]byte, error) {
 	return html, nil
 }
 
-func entriesFromDir(fs http.FileSystem, path, activepath string) entries {
+func entriesFromDir(fs http.FileSystem, path, activepath string) (entries, error) {
 	var ret entries
 
 	dir, err := fs.Open(path)
 	if err != nil {
-		err = errors.Wrapf(err, "Cannot open directory: %q", path)
-		log.Println(err)
-		return nil
+		return nil, errors.Wrapf(err, "Cannot open directory: %q", path)
 	}
 
 	dirlist, err := dir.Readdir(0)
 	if err != nil {
-		err = errors.Wrapf(err, "Cannot read directory: %q", path)
-		log.Println(err)
+		return nil, errors.Wrapf(err, "Cannot read directory: %q", path)
 	}
 	dir.Close()
 
@@ -310,7 +307,7 @@ func entriesFromDir(fs http.FileSystem, path, activepath string) entries {
 	}
 
 	sort.Sort(ret)
-	return ret
+	return ret, nil
 }
 
 type Page struct {
@@ -320,13 +317,18 @@ type Page struct {
 	Index    *entry
 }
 
-func PageFromDir(fs http.FileSystem, path string) Page {
+func PageFromDir(fs http.FileSystem, path string) (Page, error) {
 	var p Page
 	path = filepath.Clean(path)
 	activepath := path
 
 	for {
-		menu, articles := entriesFromDir(fs, path, activepath).Split()
+		es, err := entriesFromDir(fs, path, activepath)
+		if err != nil {
+			return Page{}, errors.Wrap(err, "entriesFromDir")
+		}
+
+		menu, articles := es.Split()
 		if len(menu) > 0 {
 			sort.Sort(menu)
 			p.Menu = append(p.Menu, menu)
@@ -375,7 +377,7 @@ func PageFromDir(fs http.FileSystem, path string) Page {
 		p.Menu[l], p.Menu[r] = p.Menu[r], p.Menu[l]
 	}
 
-	return p
+	return p, nil
 }
 
 // For debugging
