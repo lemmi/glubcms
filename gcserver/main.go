@@ -66,6 +66,30 @@ func parseTemplates(fs http.FileSystem) (*template.Template, error) {
 	return tmain, nil
 }
 
+// Static file handling without showing directories
+// TODO:
+// - factor out
+
+func ServeContentFs(w http.ResponseWriter, req *http.Request, fs http.FileSystem) {
+	path := filepath.Clean(req.URL.Path)
+	f, err := fs.Open(path)
+	if err != nil {
+		http.Error(w, path, http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+	stat, err := f.Stat()
+	if err != nil {
+		http.Error(w, path, http.StatusInternalServerError)
+		return
+	}
+	if stat.IsDir() {
+		http.Error(w, path, http.StatusForbidden)
+		return
+	}
+	http.ServeContent(w, req, stat.Name(), stat.ModTime(), f)
+}
+
 type StaticHandler struct {
 	fs http.FileSystem
 }
@@ -77,6 +101,8 @@ func newStaticHandler(c *g.Commit) (http.Handler, error) {
 	stree, err := c.Tree.SubTree("static")
 	return http.FileServer(ghfs.FromCommit(c, stree)), err
 }
+
+// Handling of an article or menu entry
 
 type pageHandler struct {
 	c *g.Commit
@@ -105,26 +131,10 @@ func (h pageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "", h.c.Author.When, bytes.NewReader(tbuf.Bytes()))
 }
 
-// func ServeContent(w ResponseWriter, req *Request, name string, modtime time.Time, content io.ReadSeeker)
-func ServeContentFs(w http.ResponseWriter, req *http.Request, fs http.FileSystem) {
-	path := filepath.Clean(req.URL.Path)
-	f, err := fs.Open(path)
-	if err != nil {
-		http.Error(w, path, http.StatusNotFound)
-		return
-	}
-	defer f.Close()
-	stat, err := f.Stat()
-	if err != nil {
-		http.Error(w, path, http.StatusInternalServerError)
-		return
-	}
-	if stat.IsDir() {
-		http.Error(w, path, http.StatusForbidden)
-		return
-	}
-	http.ServeContent(w, req, stat.Name(), stat.ModTime(), f)
-}
+// Main handling of the site
+// TODO:
+// - parse meta entries first
+// - choose handler based on that, not by path
 
 type handler struct {
 	prefix string
@@ -138,6 +148,7 @@ func newHandler(prefix string) handler {
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path, err := filepath.Abs(h.prefix)
+	// TODO errors package, proper http codes
 	POE(err, "Filepath")
 
 	repo, err := g.OpenRepository(path)
