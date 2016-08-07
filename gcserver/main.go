@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"flag"
-	"github.com/pkg/errors"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -16,6 +15,7 @@ import (
 	g "github.com/gogits/git"
 	"github.com/lemmi/ghfs"
 	"github.com/lemmi/glubcms"
+	"github.com/pkg/errors"
 	"github.com/raymondbutcher/tidyhtml"
 )
 
@@ -23,11 +23,9 @@ const (
 	tmplPath = "templates"
 )
 
-func POE(err error, prefix ...interface{}) {
-	if err != nil {
-		log.Print(prefix...)
-		log.Fatal(err)
-	}
+func HttpError(w http.ResponseWriter, code int, logErr error) {
+	log.Print(logErr)
+	http.Error(w, http.StatusText(code), code)
 }
 
 func parseTemplates(fs http.FileSystem) (*template.Template, error) {
@@ -105,6 +103,8 @@ func newStaticHandler(fs http.FileSystem) StaticHandler {
 }
 
 // Handling of an article or menu entry
+// TODO:
+// - use http.FileSystem only
 
 type pageHandler struct {
 	c *g.Commit
@@ -116,17 +116,20 @@ func newPageHandler(c *g.Commit) http.Handler {
 func (h pageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	tmpl := template.Must(parseTemplates(ghfs.FromCommit(h.c)))
 	stree, err := h.c.Tree.SubTree("pages")
-	POE(err, "Pages")
+	if err != nil {
+		HttpError(w, http.StatusNotFound, errors.Wrap(err, "Pages"))
+		return
+	}
 
 	p := glubcms.PageFromDir(ghfs.FromCommit(h.c, stree), r.URL.Path)
 	buf := bytes.Buffer{}
 	if err := tmpl.ExecuteTemplate(&buf, "main", p); err != nil {
-		log.Println(errors.Wrapf(err, "template execution failed: %q", r.URL.Path))
+		HttpError(w, http.StatusInternalServerError, errors.Wrapf(err, "template execution failed: %q", r.URL.Path))
 		return
 	}
 	tbuf := bytes.Buffer{}
 	if err := tidyhtml.Copy(&tbuf, &buf); err != nil {
-		log.Println(errors.Wrapf(err, "tidyhtml failed: %q", r.URL.Path))
+		HttpError(w, http.StatusInternalServerError, errors.Wrapf(err, "tidyhtml failed: %q", r.URL.Path))
 		return
 	}
 	w.Header().Set("Content-Type", "text/html")
@@ -150,14 +153,22 @@ func newHandler(prefix string) handler {
 
 func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path, err := filepath.Abs(h.prefix)
-	// TODO errors package, proper http codes
-	POE(err, "Filepath")
+	if err != nil {
+		HttpError(w, http.StatusInternalServerError, errors.Wrap(err, "filepath.Abs("+h.prefix+")"))
+		return
+	}
 
 	repo, err := g.OpenRepository(path)
-	POE(err, "OpenRepository")
+	if err != nil {
+		HttpError(w, http.StatusInternalServerError, errors.Wrap(err, "g.OpenRepository("+path+")"))
+		return
+	}
 
 	commit, err := repo.GetCommitOfBranch("master")
-	POE(err, "LookupBranch")
+	if err != nil {
+		HttpError(w, http.StatusInternalServerError, errors.Wrap(err, "Can not open master branch"))
+		return
+	}
 
 	mux := http.NewServeMux()
 
