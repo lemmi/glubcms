@@ -74,44 +74,6 @@ func parseTemplates(fs http.FileSystem) (*template.Template, error) {
 	return tmain, nil
 }
 
-// Static file handling without showing directories
-// TODO:
-// - factor out
-
-type StaticHandler struct {
-	fs     http.FileSystem
-	prefix string
-}
-
-func (sh StaticHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	path := filepath.Clean(filepath.Join(sh.prefix, r.URL.Path))
-	f, err := sh.fs.Open(path)
-	if err != nil {
-		http.Error(w, path, http.StatusNotFound)
-		return
-	}
-	defer f.Close()
-	stat, err := f.Stat()
-	if err != nil {
-		http.Error(w, path, http.StatusInternalServerError)
-		return
-	}
-	if stat.IsDir() {
-		http.Error(w, path, http.StatusNotFound)
-		return
-	}
-	http.ServeContent(w, r, stat.Name(), stat.ModTime(), f)
-}
-
-func (sh StaticHandler) Cd(path string) StaticHandler {
-	sh.prefix = filepath.Join(sh.prefix, path)
-	return sh
-}
-
-func newStaticHandler(fs http.FileSystem) StaticHandler {
-	return StaticHandler{fs: fs}
-}
-
 // Handling of an article or menu entry
 // TODO:
 // - use http.FileSystem only
@@ -186,7 +148,7 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	mux := http.NewServeMux()
 
-	staticHandler := newStaticHandler(ghfs.FromCommit(commit))
+	staticHandler := glubcms.NewStaticHandler(ghfs.FromCommit(commit))
 
 	mux.Handle("/static/", staticHandler)
 	mux.Handle("/robots.txt", staticHandler.Cd("/static"))
