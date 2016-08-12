@@ -11,19 +11,26 @@ type Meta struct {
 	Unsafe   bool      `json:",omitempty"`
 	IsIndex  bool      `json:",omitempty"`
 	IsMenu   bool      `json:",omitempty"`
+	Option   []Content `json:",omitempty"`
 	Content  []Content `json:",omitempty"`
 }
-
-const (
-	ContentArticle  = "article"
-	ContentGallery  = "gallery"
-	ContentSitemap  = "sitemap"
-	ContentOverview = "overview"
-	ContentRedirect = "redirect"
-)
 
 type Content struct {
 	Type   string
 	Inline string `json:",omitempty"`
 	Path   string `json:",omitempty"`
 }
+
+const (
+	ContentGallery  = "gallery"
+	ContentHTML     = "html"
+	ContentMarkdown = "markdown"
+	ContentIndex    = "index"
+	ContentSitemap  = "sitemap"
+
+	OptionCSS      = "css"
+	OptionJS       = "js"
+	OptionTemplate = "template"
+	OptionRedirect = "redirect"
+	OptionStatic   = "static"
+)
