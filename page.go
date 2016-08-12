@@ -94,16 +94,6 @@ func (t GCTime) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + t.String() + `"`), nil
 }
 
-type Meta struct {
-	Author   string
-	Date     GCTime
-	Title    string
-	Priority int
-	Hidden   bool `json:",omitempty"`
-	Unsafe   bool `json:",omitempty"`
-	IsIndex  bool `json:",omitempty"`
-}
-
 type ContentRenderer interface {
 	Render() ([]byte, error)
 }
