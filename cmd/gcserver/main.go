@@ -79,21 +79,19 @@ func parseTemplates(fs http.FileSystem) (*template.Template, error) {
 // - use http.FileSystem only
 
 type pageHandler struct {
-	c *g.Commit
+	glubcms.StaticHandler
 }
 
-func newPageHandler(c *g.Commit) http.Handler {
-	return pageHandler{c}
-}
 func (h pageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	tmpl := template.Must(parseTemplates(ghfs.FromCommit(h.c)))
-	stree, err := h.c.Tree.SubTree("pages")
-	if err != nil {
-		HttpError(w, http.StatusNotFound, errors.Wrap(err, "Pages"))
-		return
-	}
+	tmpl := template.Must(parseTemplates(h))
+	pages := h.Cd("pages")
+	//stree, err := h.c.Tree.SubTree("pages")
+	//if err != nil {
+	//	HttpError(w, http.StatusNotFound, errors.Wrap(err, "Pages"))
+	//	return
+	//}
 
-	p, err := glubcms.PageFromDir(ghfs.FromCommit(h.c, stree), r.URL.Path)
+	p, err := glubcms.PageFromDir(pages, r.URL.Path)
 	if err != nil {
 		HttpError(w, http.StatusInternalServerError, errors.Wrapf(err, "page generation failed"))
 		return
@@ -109,7 +107,7 @@ func (h pageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html")
-	http.ServeContent(w, r, "", h.c.Author.When, bytes.NewReader(tbuf.Bytes()))
+	http.ServeContent(w, r, "", p.ModTime, bytes.NewReader(tbuf.Bytes()))
 }
 
 // Main handling of the site
@@ -119,11 +117,13 @@ func (h pageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 type handler struct {
 	prefix string
+	git    bool
 }
 
-func newHandler(prefix string) handler {
+func newHandler(prefix string, git bool) handler {
 	return handler{
 		prefix: prefix,
+		git:    git,
 	}
 }
 
@@ -134,27 +134,33 @@ func (h handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	repo, err := g.OpenRepository(path)
-	if err != nil {
-		HttpError(w, http.StatusInternalServerError, errors.Wrap(err, "g.OpenRepository("+path+")"))
-		return
+	var fs http.FileSystem
+
+	if h.git {
+		repo, err := g.OpenRepository(path)
+		if err != nil {
+			HttpError(w, http.StatusInternalServerError, errors.Wrap(err, "g.OpenRepository("+path+")"))
+			return
+		}
+
+		commit, err := repo.GetCommitOfBranch("master")
+		if err != nil {
+			HttpError(w, http.StatusInternalServerError, errors.Wrap(err, "Can not open master branch"))
+			return
+		}
+		fs = ghfs.FromCommit(commit)
+		w.Header().Set("ETag", strings.Trim(commit.Id.String(), "\""))
+	} else {
+		fs = http.Dir(path)
 	}
 
-	commit, err := repo.GetCommitOfBranch("master")
-	if err != nil {
-		HttpError(w, http.StatusInternalServerError, errors.Wrap(err, "Can not open master branch"))
-		return
-	}
+	staticHandler := glubcms.NewStaticHandler(fs)
 
 	mux := http.NewServeMux()
-
-	staticHandler := glubcms.NewStaticHandler(ghfs.FromCommit(commit))
-
 	mux.Handle("/static/", staticHandler)
 	mux.Handle("/robots.txt", staticHandler.Cd("/static"))
 	mux.Handle("/favicon.ico", staticHandler.Cd("/static"))
-	mux.Handle("/", newPageHandler(commit))
-	w.Header().Set("ETag", strings.Trim(commit.Id.String(), "\""))
+	mux.Handle("/", pageHandler{staticHandler})
 	w.Header().Set("Cache-Control", "max-age=32")
 	mux.ServeHTTP(w, r)
 }
@@ -163,6 +169,7 @@ func main() {
 	prefix := flag.String("prefix", "../example_page", "path to the root dir")
 	addr := flag.String("bind", "localhost:8080", "address or path to bind to")
 	network := flag.String("net", "tcp", `"tcp", "tcp4", "tcp6", "unix" or "unixpacket"`)
+	git := flag.Bool("git", false, "prefix is a git repo")
 	flag.Parse()
 	ln, err := net.Listen(*network, *addr)
 	if err != nil {
@@ -176,5 +183,5 @@ func main() {
 		panic(err)
 	}
 	log.Println("Starting")
-	log.Fatal(http.Serve(ln, newHandler(*prefix)))
+	log.Fatal(http.Serve(ln, newHandler(*prefix, *git)))
 }
