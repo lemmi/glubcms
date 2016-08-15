@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/pkg/errors"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
 
 	bm "github.com/microcosm-cc/bluemonday"
 	bf "github.com/russross/blackfriday"
@@ -310,11 +311,19 @@ func entriesFromDir(fs http.FileSystem, path, activepath string) (entries, error
 	return ret, nil
 }
 
+func latestOf(modtime time.Time, e *entry) time.Time {
+	if e != nil && modtime.After(e.Date()) {
+		return modtime
+	}
+	return modtime
+}
+
 type Page struct {
 	Menu     []entries
 	Articles entries
 	Content  *entry
 	Index    *entry
+	ModTime  time.Time
 }
 
 func PageFromDir(fs http.FileSystem, path string) (Page, error) {
@@ -375,6 +384,19 @@ func PageFromDir(fs http.FileSystem, path string) (Page, error) {
 	// building from deepest path to /, need to reverse
 	for l, r := 0, len(p.Menu)-1; l < r; l, r = l+1, r-1 {
 		p.Menu[l], p.Menu[r] = p.Menu[r], p.Menu[l]
+	}
+
+	// set ModTime to the latest of all values
+
+	p.ModTime = latestOf(p.ModTime, p.Index)
+	p.ModTime = latestOf(p.ModTime, p.Content)
+	for _, es := range p.Menu {
+		for i := range es {
+			p.ModTime = latestOf(p.ModTime, &es[i])
+		}
+	}
+	for i := range p.Articles {
+		p.ModTime = latestOf(p.ModTime, &p.Articles[i])
 	}
 
 	return p, nil
