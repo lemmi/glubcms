@@ -23,18 +23,26 @@ const (
 	tmplPath = "templates"
 )
 
+var (
+	DEBUG bool
+)
+
 type stackTracer interface {
 	StackTrace() errors.StackTrace
 }
 
 func HttpError(w http.ResponseWriter, code int, logErr error) {
-	//switch err := logErr.(type) {
-	//case stackTracer:
-	//	log.Printf("%+v", err.StackTrace())
-	//default:
-	//	log.Print(err)
-	//}
-	log.Print(logErr)
+	if DEBUG {
+		switch err := logErr.(type) {
+		case stackTracer:
+			log.Print(err)
+			log.Printf("%+v", err.StackTrace())
+		default:
+			log.Print(err)
+		}
+	} else {
+		log.Print(logErr)
+	}
 	http.Error(w, http.StatusText(code), code)
 }
 
@@ -170,6 +178,7 @@ func main() {
 	addr := flag.String("bind", "localhost:8080", "address or path to bind to")
 	network := flag.String("net", "tcp", `"tcp", "tcp4", "tcp6", "unix" or "unixpacket"`)
 	git := flag.Bool("git", false, "prefix is a git repo")
+	flag.BoolVar(&DEBUG, "debug", false, "set debug output")
 	flag.Parse()
 	ln, err := net.Listen(*network, *addr)
 	if err != nil {
@@ -183,5 +192,11 @@ func main() {
 		panic(err)
 	}
 	log.Println("Starting")
+	if DEBUG {
+		log.Println("prefix: ", *prefix)
+		log.Println("addr: ", *addr)
+		log.Println("network: ", *network)
+		log.Println("git: ", *git)
+	}
 	log.Fatal(http.Serve(ln, newHandler(*prefix, *git)))
 }
