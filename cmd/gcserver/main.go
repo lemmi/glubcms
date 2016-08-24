@@ -198,5 +198,5 @@ func main() {
 		log.Println("network: ", *network)
 		log.Println("git: ", *git)
 	}
-	log.Fatal(http.Serve(ln, newHandler(*prefix, *git)))
+	log.Fatal(http.Serve(ln, glubcms.NewCompressHandler(newHandler(*prefix, *git))))
 }
