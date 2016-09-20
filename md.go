@@ -19,3 +19,14 @@ func (md ImageAltTitleCopy) Image(out *bytes.Buffer, link []byte, title []byte, 
 	}
 	md.Renderer.Image(out, link, title, alt)
 }
+
+type CorrectHeadingLevel struct {
+	bf.Renderer
+}
+
+func (md CorrectHeadingLevel) Header(out *bytes.Buffer, text func() bool, level int, id string) {
+	if level < 6 {
+		level++
+	}
+	md.Renderer.Header(out, text, level, id)
+}
