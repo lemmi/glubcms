@@ -277,11 +277,9 @@ func (a articleRenderer) Render() ([]byte, error) {
 		return nil, errors.Wrapf(err, "Cannot read markdown file: %q", a.md_path)
 	}
 	html := bf.Markdown(b,
-		CorrectHeadingLevel{
-			ImageAltTitleCopy{
-				bf.HtmlRenderer(0, "", ""),
-			},
-		}, bf.EXTENSION_TABLES)
+		NewMdModifier(
+			bf.HtmlRenderer(0, "", ""),
+		), bf.EXTENSION_TABLES)
 	if !a.unsafe {
 		html = bm.UGCPolicy().SanitizeBytes(html)
 	}
