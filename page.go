@@ -95,13 +95,15 @@ func (t GCTime) MarshalJSON() ([]byte, error) {
 }
 
 type Meta struct {
-	Author   string
-	Date     GCTime
-	Title    string
-	Priority int
-	Hidden   bool `json:",omitempty"`
-	Unsafe   bool `json:",omitempty"`
-	IsIndex  bool `json:",omitempty"`
+	Author      string
+	Date        GCTime
+	Title       string
+	Priority    int
+	Hidden      bool `json:",omitempty"`
+	Unsafe      bool `json:",omitempty"`
+	IsIndex     bool `json:",omitempty"`
+	ExtraStyle  []string
+	ExtraScript []string
 }
 
 type ContentRenderer interface {
@@ -130,6 +132,12 @@ func (a entry) Author() string {
 }
 func (e entry) Date() time.Time {
 	return time.Time(e.meta.Date)
+}
+func (e *entry) ExtraStyle() []string {
+	return e.meta.ExtraStyle
+}
+func (e *entry) ExtraScript() []string {
+	return e.meta.ExtraScript
 }
 func (e *entry) HTML() template.HTML {
 	e.once.Do(func() {
