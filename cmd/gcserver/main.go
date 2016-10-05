@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	g "github.com/gogits/git"
+	"github.com/lemmi/compress"
 	"github.com/lemmi/ghfs"
 	"github.com/lemmi/glubcms"
 	"github.com/pkg/errors"
@@ -198,5 +199,5 @@ func main() {
 		log.Println("network: ", *network)
 		log.Println("git: ", *git)
 	}
-	log.Fatal(http.Serve(ln, glubcms.NewCompressHandler(newHandler(*prefix, *git))))
+	log.Fatal(http.Serve(ln, compress.New(newHandler(*prefix, *git))))
 }
