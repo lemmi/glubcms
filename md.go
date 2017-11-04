@@ -3,10 +3,12 @@ package glubcms
 import (
 	"bytes"
 
+	"github.com/lemmi/glubcms/backend"
 	bf "github.com/russross/blackfriday"
 )
 
 type mdModifier struct {
+	fs backend.CIDer
 	bf.Renderer
 	printHeader bool
 }
@@ -15,6 +17,11 @@ func NewMdModifier(r bf.Renderer) bf.Renderer {
 	return &mdModifier{
 		Renderer: r,
 	}
+}
+
+func (md *mdModifier) Link(out *bytes.Buffer, link []byte, title []byte, content []byte) {
+	//if ()
+	md.Renderer.Link(out, link, title, content)
 }
 
 func (md *mdModifier) Image(out *bytes.Buffer, link []byte, title []byte, alt []byte) {

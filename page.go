@@ -4,22 +4,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"html/template"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/pkg/errors"
 
-	bm "github.com/microcosm-cc/bluemonday"
-	bf "github.com/russross/blackfriday"
+	"github.com/lemmi/glubcms/backend"
 )
 
 const (
@@ -29,50 +24,6 @@ const (
 var (
 	ErrHidden = errors.New("Hidden")
 )
-
-type Entry interface {
-	Active() bool
-	Author() string
-	Date() time.Time
-	HTML() template.HTML
-	IsArticle() bool
-	Link() string
-	Priority() int
-	Title() string
-	Next() Entry
-	Prev() Entry
-}
-
-type entries []entry
-
-func (e entries) Len() int {
-	return len(e)
-}
-func (e entries) Less(i, j int) bool {
-	switch {
-	case e[i].meta.IsIndex && !e[j].meta.IsIndex:
-		return false
-	case !e[i].meta.IsIndex && e[j].meta.IsIndex:
-		return true
-	case e[i].Priority() != e[j].Priority():
-		return e[i].Priority() > e[j].Priority()
-	}
-	return e[i].Date().After(e[j].Date())
-}
-func (e entries) Swap(i, j int) {
-	e[i], e[j] = e[j], e[i]
-}
-func (e entries) Split() (Menu, Articles entries) {
-	for _, v := range e {
-		if v.IsArticle() {
-			Articles = append(Articles, v)
-		} else {
-			Menu = append(Menu, v)
-		}
-	}
-
-	return
-}
 
 type GCTime time.Time
 
@@ -106,113 +57,8 @@ type Meta struct {
 	ExtraScript []string
 }
 
-type ContentRenderer interface {
-	Render() ([]byte, error)
-}
-
-type entry struct {
-	meta       Meta
-	active     bool
-	html       []byte
-	isarticle  bool
-	link       url.URL
-	next       *entry
-	prev       *entry
-	fs         http.FileSystem
-	md_path    string
-	once       sync.Once
-	renderHTML ContentRenderer
-}
-
-func (e entry) Active() bool {
-	return e.active
-}
-func (a entry) Author() string {
-	return a.meta.Author
-}
-func (e entry) Date() time.Time {
-	return time.Time(e.meta.Date)
-}
-func (e *entry) ExtraStyle() []string {
-	return e.meta.ExtraStyle
-}
-func (e *entry) ExtraScript() []string {
-	return e.meta.ExtraScript
-}
-func (e *entry) HTML() template.HTML {
-	e.once.Do(func() {
-		var err error
-		e.html, err = e.renderHTML.Render()
-		if err != nil {
-			//TODO make errorpage
-			log.Println(err)
-		}
-	})
-	return template.HTML(e.html)
-}
-func (e entry) IsArticle() bool {
-	return e.isarticle
-}
-func (e entry) Link() string {
-	return e.link.String()
-}
-func (e entry) Priority() int {
-	return e.meta.Priority
-}
-func (e entry) Title() string {
-	return e.meta.Title
-}
-func (e entry) Next() Entry {
-	if e.next != nil {
-		return e.next
-	}
-	return nil
-}
-func (e entry) Prev() Entry {
-	if e.prev != nil {
-		return e.prev
-	}
-	return nil
-}
-func (e entry) IsIndex() bool {
-	return e.meta.IsIndex
-}
-func (e *entry) Context(c int) entries {
-	next := e
-	prev := e
-	n := 1
-
-	for {
-		moved := false
-
-		if n < c && next.next != nil {
-			moved = true
-			next = next.next
-			n++
-		}
-		if n < c && prev.prev != nil {
-			moved = true
-			prev = prev.prev
-			n++
-		}
-
-		if n == c || moved == false {
-			break
-		}
-	}
-
-	ret := make(entries, 0, n)
-	t := next
-	for n > 0 {
-		ret = append(ret, *t)
-		t = t.prev
-		n--
-	}
-	return ret
-}
-
-func entryFromMeta(fs http.FileSystem, path string) (entry, error) {
-	ret := entry{}
+func entryFromMeta(fs backend.Backend, path string) (Entry, error) {
+	ret := Entry{}
 	f, err := fs.Open(filepath.Join(path))
 	if err != nil {
 		return ret, errors.Wrapf(err, "file open failed: %q", path)
@@ -226,7 +72,7 @@ func entryFromMeta(fs http.FileSystem, path string) (entry, error) {
 	return ret, err
 }
 
-func entryFromDir(fs http.FileSystem, path, activepath string) (ret entry, err error) {
+func entryFromDir(fs backend.Backend, path, activepath string) (ret Entry, err error) {
 	ret, err = entryFromMeta(fs, filepath.Join(path, "meta.json"))
 	if err != nil {
 		err = errors.Wrapf(err, "Cannot open meta.json in: %q", path)
@@ -267,35 +113,8 @@ func entryFromDir(fs http.FileSystem, path, activepath string) (ret entry, err e
 	return ret, nil
 }
 
-type articleRenderer struct {
-	fs      http.FileSystem
-	md_path string
-	unsafe  bool
-}
-
-func (a articleRenderer) Render() ([]byte, error) {
-	md, err := a.fs.Open(a.md_path)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Cannot open markdown file: %q", a.md_path)
-	}
-	defer md.Close()
-
-	b, err := ioutil.ReadAll(md)
-	if err != nil {
-		return nil, errors.Wrapf(err, "Cannot read markdown file: %q", a.md_path)
-	}
-	html := bf.Markdown(b,
-		NewMdModifier(
-			bf.HtmlRenderer(0, "", ""),
-		), bf.EXTENSION_TABLES)
-	if !a.unsafe {
-		html = bm.UGCPolicy().SanitizeBytes(html)
-	}
-	return html, nil
-}
-
-func entriesFromDir(fs http.FileSystem, path, activepath string) (entries, error) {
-	var ret entries
+func entriesFromDir(fs backend.Backend, path, activepath string) (Entries, error) {
+	var ret Entries
 
 	dir, err := fs.Open(path)
 	if err != nil {
@@ -318,11 +137,11 @@ func entriesFromDir(fs http.FileSystem, path, activepath string) (entries, error
 		}
 	}
 
-	sort.Sort(ret)
+	sort.Slice(ret, ret.Less)
 	return ret, nil
 }
 
-func latestOf(modtime time.Time, e *entry) time.Time {
+func latestOf(modtime time.Time, e *Entry) time.Time {
 	if e != nil && modtime.After(e.Date()) {
 		return modtime
 	}
@@ -330,14 +149,14 @@ func latestOf(modtime time.Time, e *entry) time.Time {
 }
 
 type Page struct {
-	Menu     []entries
-	Articles entries
-	Content  *entry
-	Index    *entry
+	Menu     []Entries
+	Articles Entries
+	Content  *Entry
+	Index    *Entry
 	ModTime  time.Time
 }
 
-func PageFromDir(fs http.FileSystem, path string) (Page, error) {
+func PageFromDir(fs backend.Backend, path string) (Page, error) {
 	var p Page
 	path = filepath.Clean(path)
 	activepath := path
@@ -348,14 +167,14 @@ func PageFromDir(fs http.FileSystem, path string) (Page, error) {
 			return Page{}, errors.Wrap(err, "entriesFromDir")
 		}
 
-		menu, articles := es.Split()
+		menu, articles := SplitEntries(es)
 		if len(menu) > 0 {
-			sort.Sort(menu)
+			sort.Slice(menu, menu.Less)
 			p.Menu = append(p.Menu, menu)
 		}
 
 		if p.Articles == nil && len(articles) > 0 {
-			sort.Sort(articles)
+			sort.Slice(articles, articles.Less)
 			p.Articles = articles
 
 			// don't list the index page as article
@@ -436,6 +255,7 @@ func (p Page) Outline() string {
 		}
 		fmt.Fprintln(&buf)
 	}
+
 	fmt.Fprintln(&buf, "Content:")
 	if p.Content != nil {
 		fmt.Fprint(&buf, p.Content.Title())
