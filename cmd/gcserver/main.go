@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	g "github.com/gogits/git"
 	"github.com/lemmi/compress"
 	"github.com/lemmi/ghfs"
+	g "github.com/lemmi/git"
 	"github.com/lemmi/glubcms"
 	"github.com/pkg/errors"
 	"github.com/raymondbutcher/tidyhtml"
@@ -53,7 +53,7 @@ func parseTemplates(fs http.FileSystem) (*template.Template, error) {
 		return nil, errors.Wrapf(err, "Cannot open directory: %q", tmplPath)
 	}
 	defer dir.Close()
-	tmain := template.New("main")
+	tmain := template.New("_")
 	fis, err := dir.Readdir(-1)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Cannot read directory: %q", tmplPath)
@@ -107,7 +107,7 @@ func (h pageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	buf := bytes.Buffer{}
 	if err := tmpl.ExecuteTemplate(&buf, "main", p); err != nil {
-		HttpError(w, http.StatusInternalServerError, errors.Wrapf(err, "template execution failed: %q", r.URL.Path))
+		HttpError(w, http.StatusInternalServerError, errors.Wrapf(err, "template execution failed: %q\n%s", r.URL.Path, tmpl.DefinedTemplates()))
 		return
 	}
 	tbuf := bytes.Buffer{}
