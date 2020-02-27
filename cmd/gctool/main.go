@@ -72,6 +72,20 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
+
+		func(dirname string) {
+			articlefile, err := os.Create(filepath.Join(dirname, "article.md"))
+			if err != nil {
+				panic(err)
+			}
+			defer articlefile.Close()
+			if _, err := fmt.Fprintf(articlefile, "![title](/static/images/%s/0001.jpg)\n", dirname); err != nil {
+				panic(err)
+			}
+			if _, err := fmt.Fprintf(articlefile, "*Foto: *\n"); err != nil {
+				panic(err)
+			}
+		}(*dirname)
 	}
 	fmt.Println(*dirname)
 	fmt.Println(string(b))
