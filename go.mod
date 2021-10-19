@@ -8,7 +8,7 @@ require (
 	github.com/gogits/git v0.0.0-00010101000000-000000000000
 	github.com/lemmi/compress v0.0.0-20161005222315-481bb1aa824f
 	github.com/lemmi/ghfs v0.0.0-20170601003624-6275da6ae931
-	github.com/microcosm-cc/bluemonday v1.0.15
+	github.com/microcosm-cc/bluemonday v1.0.16
 	github.com/pkg/errors v0.9.1
 	github.com/raymondbutcher/tidyhtml v0.0.0-20150509150256-94c68d4f3550
 	github.com/russross/blackfriday v1.6.0

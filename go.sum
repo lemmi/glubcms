@@ -1,4 +1,3 @@
-github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d/go.mod h1:WaHUgvxTVq04UNunO+XhnAqY/wQc+bxr74GqbsZ/Jqw=
 github.com/aymerick/douceur v0.2.0 h1:Mv+mAeH1Q+n9Fr+oyamOlAkUNPWPlA8PPGR0QAaYuPk=
 github.com/aymerick/douceur v0.2.0/go.mod h1:wlT5vV2O3h55X9m7iVYN0TBM0NH/MmbLnd30/FjWUq4=
 github.com/gopherjs/gopherjs v0.0.0-20181017120253-0766667cb4d1/go.mod h1:wJfORRmW1u3UXTncJ5qlYoELFm8eSnnEO6hX4iZ3EWY=
@@ -15,8 +14,8 @@ github.com/lemmi/ghfs v0.0.0-20170601003624-6275da6ae931 h1:vVwrgVOoDEZXzzeJK3YU
 github.com/lemmi/ghfs v0.0.0-20170601003624-6275da6ae931/go.mod h1:IHIBzF8YPnsA8OBV9gpFFQ1LnTJfRkPH56JXqnnxXmE=
 github.com/lemmi/git v0.0.2 h1:Lb0y/Ptpa+PaHmrF8RyOrAvTR60zUKpACTSUrKRlAbQ=
 github.com/lemmi/git v0.0.2/go.mod h1:BJQnBcXwIqdxn9K9HNAdyMvdsul7hC2D8iS6uuWB+Fc=
-github.com/microcosm-cc/bluemonday v1.0.15 h1:J4uN+qPng9rvkBZBoBb8YGR+ijuklIMpSOZZLjYpbeY=
-github.com/microcosm-cc/bluemonday v1.0.15/go.mod h1:ZLvAzeakRwrGnzQEvstVzVt3ZpqOF2+sdFr0Om+ce30=
+github.com/microcosm-cc/bluemonday v1.0.16 h1:kHmAq2t7WPWLjiGvzKa5o3HzSfahUKiOq7fAPUiMNIc=
+github.com/microcosm-cc/bluemonday v1.0.16/go.mod h1:Z0r70sCuXHig8YpBzCc5eGHAap2K7e/u082ZUpDRRqM=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/raymondbutcher/tidyhtml v0.0.0-20150509150256-94c68d4f3550 h1:YISN1AoNs7eOB3HcwNLtKeFGUWy9s1RZsKz9bUvDZg4=
